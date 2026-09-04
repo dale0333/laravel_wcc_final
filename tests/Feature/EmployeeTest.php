@@ -49,6 +49,130 @@ test('employee can be created', function () {
     expect(EmployeeModel::first()->hired_at->toDateString())->toBe($hireDate);
 });
 
+test('employee can be edited', function () {
+    $this->actingAs(User::factory()->create());
+    $employee = EmployeeModel::factory()->create([
+        'employee_number' => 'EMP-1001',
+        'first_name' => 'Alvin',
+        'last_name' => 'Joyosa',
+        'email' => 'alvin@example.com',
+        'phone' => '09171234567',
+        'position' => 'Software Engineer',
+        'hired_at' => '2026-09-03',
+    ]);
+
+    Livewire::test(Employee::class)
+        ->call('edit', $employee->id)
+        ->assertSet('editingEmployeeId', $employee->id)
+        ->assertSet('employeeNumber', 'EMP-1001')
+        ->assertSet('firstName', 'Alvin')
+        ->assertSet('lastName', 'Joyosa')
+        ->assertSet('email', 'alvin@example.com')
+        ->set('employeeNumber', 'EMP-2002')
+        ->set('firstName', 'Dale')
+        ->set('lastName', 'Santos')
+        ->set('email', 'dale@example.com')
+        ->set('phone', '')
+        ->set('position', 'Project Manager')
+        ->set('hiredAt', '2026-09-02')
+        ->call('save')
+        ->assertHasNoErrors()
+        ->assertDispatched('updated')
+        ->assertSet('editingEmployeeId', null)
+        ->assertSet('showSuccessModal', true)
+        ->assertSee('Employee Updated');
+
+    $this->assertDatabaseHas('employees', [
+        'id' => $employee->id,
+        'employee_number' => 'EMP-2002',
+        'first_name' => 'Dale',
+        'last_name' => 'Santos',
+        'email' => 'dale@example.com',
+        'phone' => null,
+        'position' => 'Project Manager',
+    ]);
+
+    expect($employee->fresh()->hired_at->toDateString())->toBe('2026-09-02');
+});
+
+test('employee update allows the current unique values', function () {
+    $this->actingAs(User::factory()->create());
+    $employee = EmployeeModel::factory()->create([
+        'employee_number' => 'EMP-1001',
+        'email' => 'alvin@example.com',
+    ]);
+
+    Livewire::test(Employee::class)
+        ->call('edit', $employee->id)
+        ->call('save')
+        ->assertHasNoErrors()
+        ->assertDispatched('updated');
+
+    $this->assertDatabaseCount('employees', 1);
+});
+
+test('employee update validates unique fields against other employees', function () {
+    $this->actingAs(User::factory()->create());
+    EmployeeModel::factory()->create([
+        'employee_number' => 'EMP-1001',
+        'email' => 'alvin@example.com',
+    ]);
+    $employee = EmployeeModel::factory()->create([
+        'employee_number' => 'EMP-2002',
+        'email' => 'dale@example.com',
+    ]);
+
+    Livewire::test(Employee::class)
+        ->call('edit', $employee->id)
+        ->set('employeeNumber', 'EMP-1001')
+        ->set('email', 'alvin@example.com')
+        ->call('save')
+        ->assertHasErrors([
+            'employeeNumber' => ['unique'],
+            'email' => ['unique'],
+        ]);
+
+    $this->assertDatabaseHas('employees', [
+        'id' => $employee->id,
+        'employee_number' => 'EMP-2002',
+        'email' => 'dale@example.com',
+    ]);
+});
+
+test('employee edit can be cancelled', function () {
+    $this->actingAs(User::factory()->create());
+    $employee = EmployeeModel::factory()->create([
+        'employee_number' => 'EMP-1001',
+        'first_name' => 'Alvin',
+    ]);
+
+    Livewire::test(Employee::class)
+        ->call('edit', $employee->id)
+        ->assertSet('editingEmployeeId', $employee->id)
+        ->call('cancelEdit')
+        ->assertSet('editingEmployeeId', null)
+        ->assertSet('employeeNumber', '')
+        ->assertSet('firstName', '');
+});
+
+test('employee can be deleted', function () {
+    $this->actingAs(User::factory()->create());
+    $employee = EmployeeModel::factory()->create();
+
+    Livewire::test(Employee::class)
+        ->call('confirmDelete', $employee->id)
+        ->assertSet('deletingEmployeeId', $employee->id)
+        ->assertSet('showDeleteModal', true)
+        ->call('delete')
+        ->assertDispatched('deleted')
+        ->assertSet('deletingEmployeeId', null)
+        ->assertSet('showDeleteModal', false)
+        ->assertSet('showSuccessModal', true)
+        ->assertSee('Employee Deleted');
+
+    $this->assertModelMissing($employee);
+});
+
 test('employee creation validates required fields', function () {
     $this->actingAs(User::factory()->create());
 
