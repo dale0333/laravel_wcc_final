@@ -7,11 +7,14 @@ use Illuminate\Contracts\View\View;
 use Livewire\Attributes\Layout;
 use Livewire\Attributes\Title;
 use Livewire\Component;
+use Livewire\WithPagination;
 
 #[Layout('layouts.app')]
 #[Title('Employee')]
 class Employee extends Component
 {
+    use WithPagination;
+
     public ?int $editingEmployeeId = null;
 
     public ?int $deletingEmployeeId = null;
@@ -67,8 +70,6 @@ class Employee extends Component
 
         $this->resetForm();
         $this->showSuccess('Employee Added', 'The employee record was created successfully.');
-
-        $this->dispatch('saved');
     }
 
     public function edit(int $employeeId): void
@@ -118,8 +119,6 @@ class Employee extends Component
         $this->deletingEmployeeId = null;
         $this->showDeleteModal = false;
         $this->showSuccess('Employee Deleted', 'The employee record was deleted successfully.');
-
-        $this->dispatch('deleted');
     }
 
     public function closeDeleteModal(): void
@@ -133,11 +132,7 @@ class Employee extends Component
         $this->showSuccessModal = false;
     }
 
-    /**
-     * Get human-readable validation attribute names.
-     *
-     * @return array<string, string>
-     */
+
     protected function validationAttributes(): array
     {
         return [
@@ -156,15 +151,8 @@ class Employee extends Component
 
         $this->resetForm();
         $this->showSuccess('Employee Updated', 'The employee record was updated successfully.');
-
-        $this->dispatch('updated');
     }
 
-    /**
-     * The validation rules for updating an employee.
-     *
-     * @return array<string, string>
-     */
     protected function updateRules(): array
     {
         return array_merge($this->rules, [
@@ -173,12 +161,7 @@ class Employee extends Component
         ]);
     }
 
-    /**
-     * Convert validated Livewire properties into employee columns.
-     *
-     * @param  array<string, string>  $validated
-     * @return array<string, string|null>
-     */
+
     protected function employeeData(array $validated): array
     {
         return [
@@ -218,7 +201,7 @@ class Employee extends Component
     public function render(): View
     {
         return view('livewire.employee', [
-            'employees' => EmployeeModel::latest()->get(),
+            'employees' => EmployeeModel::latest()->paginate(5),
         ]);
     }
 }

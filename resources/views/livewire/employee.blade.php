@@ -99,10 +99,12 @@
                     </div>
 
                     <div class="flex items-center justify-end gap-4 border-t border-gray-100 bg-gray-50 px-8 py-5 lg:px-10">
-                        <button type="submit" wire:loading.attr="disabled" class="inline-flex min-h-12 items-center justify-center rounded-lg bg-gray-900 px-8 py-3 text-sm font-semibold uppercase tracking-widest text-white transition hover:bg-gray-800 focus:outline-none focus:ring-4 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:opacity-60">
+                        <button type="submit" wire:loading.attr="disabled" class="inline-flex min-h-12 items-center justify-center rounded-lg bg-indigo-600 px-8 py-3 text-sm font-semibold uppercase tracking-widest text-white transition hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-200 disabled:cursor-not-allowed disabled:opacity-60">
                             <span wire:loading.remove wire:target="save">{{ $editingEmployeeId ? 'Update Employee' : 'Add Employee' }}</span>
                             <span wire:loading wire:target="save">Saving...</span>
+                            
                         </button>
+                        
                     </div>
                 </form>
             </div>
@@ -176,6 +178,10 @@
                             </tbody>
                         </table>
                     </div>
+
+                    <div class="mt-6">
+                        {{ $employees->links() }}
+                    </div>
                 </div>
             </div>
         </div>
@@ -203,7 +209,7 @@
                 </div>
 
                 <div class="border-t border-gray-100 bg-gray-50 px-8 py-5">
-                    <button type="button" wire:click="closeSuccessModal" class="inline-flex min-h-12 w-full items-center justify-center rounded-lg bg-gray-900 px-6 py-3 text-sm font-semibold uppercase tracking-widest text-white transition hover:bg-gray-800 focus:outline-none focus:ring-4 focus:ring-indigo-200">
+                    <button type="button" wire:click="closeSuccessModal" class="inline-flex min-h-12 w-full items-center justify-center rounded-lg bg-indigo-600 px-6 py-3 text-sm font-semibold uppercase tracking-widest text-white transition hover:bg-indigo-700 focus:outline-none focus:ring-4 focus:ring-indigo-200">
                         OK
                     </button>
                 </div>

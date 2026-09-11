@@ -3,6 +3,7 @@
 use App\Livewire\Employee;
 use App\Models\Employee as EmployeeModel;
 use App\Models\User;
+use Illuminate\Database\Eloquent\Factories\Sequence;
 use Livewire\Livewire;
 
 test('employee page requires authentication', function () {
@@ -31,7 +32,6 @@ test('employee can be created', function () {
         ->set('hiredAt', $hireDate)
         ->call('save')
         ->assertHasNoErrors()
-        ->assertDispatched('saved')
         ->assertSet('showSuccessModal', true)
         ->assertSee('Employee Added')
         ->call('closeSuccessModal')
@@ -77,7 +77,6 @@ test('employee can be edited', function () {
         ->set('hiredAt', '2026-09-02')
         ->call('save')
         ->assertHasNoErrors()
-        ->assertDispatched('updated')
         ->assertSet('editingEmployeeId', null)
         ->assertSet('showSuccessModal', true)
         ->assertSee('Employee Updated');
@@ -105,8 +104,7 @@ test('employee update allows the current unique values', function () {
     Livewire::test(Employee::class)
         ->call('edit', $employee->id)
         ->call('save')
-        ->assertHasNoErrors()
-        ->assertDispatched('updated');
+        ->assertHasNoErrors();
 
     $this->assertDatabaseCount('employees', 1);
 });
@@ -164,13 +162,30 @@ test('employee can be deleted', function () {
         ->assertSet('deletingEmployeeId', $employee->id)
         ->assertSet('showDeleteModal', true)
         ->call('delete')
-        ->assertDispatched('deleted')
         ->assertSet('deletingEmployeeId', null)
         ->assertSet('showDeleteModal', false)
         ->assertSet('showSuccessModal', true)
         ->assertSee('Employee Deleted');
 
     $this->assertModelMissing($employee);
+});
+
+test('employee list is paginated', function () {
+    $this->actingAs(User::factory()->create());
+    EmployeeModel::factory()
+        ->count(6)
+        ->sequence(fn (Sequence $sequence) => [
+            'employee_number' => 'EMP-100'.$sequence->index,
+            'first_name' => 'Employee '.$sequence->index,
+            'created_at' => now()->subDays($sequence->index),
+        ])
+        ->create();
+
+    Livewire::test(Employee::class)
+        ->assertSee('EMP-1000')
+        ->assertDontSee('EMP-1005')
+        ->call('gotoPage', 2)
+        ->assertSee('EMP-1005');
 });
 
 test('employee creation validates required fields', function () {
