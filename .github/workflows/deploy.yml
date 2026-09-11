@@ -1,0 +1,119 @@
+name: Deploy
+
+on:
+  push:
+    branches:
+      - main
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+
+    env:
+      SSH_HOST: 76.13.199.85
+      SSH_PORT: 65002
+      SSH_USER: u643761585
+      DOMAIN_PATH: /home/u643761585/domains/wheat-loris-872135.hostingersite.com
+      PHP_BIN: /opt/alt/php85/usr/bin/php
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Build frontend assets
+        run: |
+          npm ci
+          npm run build
+
+      - name: Install deployment tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y rsync sshpass
+
+      - name: Trust SSH host
+        run: |
+          mkdir -p ~/.ssh
+          ssh-keyscan -p "$SSH_PORT" "$SSH_HOST" >> ~/.ssh/known_hosts
+
+      - name: Prepare remote directories
+        env:
+          SSH_PASSWORD: ${{ secrets.HOSTINGER_PASSWORD }}
+        run: |
+          sshpass -p "$SSH_PASSWORD" ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
+            mkdir -p '$DOMAIN_PATH/app' '$DOMAIN_PATH/public_html'
+          "
+
+      - name: Upload application
+        env:
+          SSH_PASSWORD: ${{ secrets.HOSTINGER_PASSWORD }}
+        run: |
+          sshpass -p "$SSH_PASSWORD" rsync -az --delete \
+            --exclude='.git' \
+            --exclude='.github' \
+            --exclude='.agents' \
+            --exclude='.claude' \
+            --exclude='.codex' \
+            --exclude='.env' \
+            --exclude='node_modules' \
+            --exclude='vendor' \
+            --exclude='tests' \
+            --exclude='storage/app/public' \
+            --exclude='storage/logs/*' \
+            --exclude='storage/framework/cache/*' \
+            --exclude='storage/framework/sessions/*' \
+            --exclude='storage/framework/views/*' \
+            -e "ssh -p $SSH_PORT" \
+            ./ "$SSH_USER@$SSH_HOST:$DOMAIN_PATH/app/"
+
+      - name: Upload public files
+        env:
+          SSH_PASSWORD: ${{ secrets.HOSTINGER_PASSWORD }}
+        run: |
+          sshpass -p "$SSH_PASSWORD" rsync -az --delete \
+            -e "ssh -p $SSH_PORT" \
+            public/ "$SSH_USER@$SSH_HOST:$DOMAIN_PATH/public_html/"
+          sshpass -p "$SSH_PASSWORD" rsync -az \
+            -e "ssh -p $SSH_PORT" \
+            deploy/hostinger-index.php "$SSH_USER@$SSH_HOST:$DOMAIN_PATH/public_html/index.php"
+
+      - name: Finalize Laravel deploy
+        env:
+          SSH_PASSWORD: ${{ secrets.HOSTINGER_PASSWORD }}
+          DB_DATABASE: ${{ secrets.HOSTINGER_DB_DATABASE }}
+          DB_USERNAME: ${{ secrets.HOSTINGER_DB_USERNAME }}
+          DB_PASSWORD: ${{ secrets.HOSTINGER_DB_PASSWORD }}
+        run: |
+          sshpass -p "$SSH_PASSWORD" ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
+            cd '$DOMAIN_PATH/app' &&
+            if [ ! -f .env ]; then
+              cp .env.example .env
+              sed -i 's#APP_ENV=local#APP_ENV=production#' .env
+              sed -i 's#APP_DEBUG=true#APP_DEBUG=false#' .env
+              sed -i 's#APP_URL=.*#APP_URL=https://wheat-loris-872135.hostingersite.com#' .env
+              sed -i 's#DB_CONNECTION=.*#DB_CONNECTION=mysql#' .env
+              sed -i 's#DB_HOST=.*#DB_HOST=127.0.0.1#' .env
+              sed -i 's#DB_PORT=.*#DB_PORT=3306#' .env
+              '$PHP_BIN' artisan key:generate --force
+            fi &&
+            sed -i 's#DB_CONNECTION=.*#DB_CONNECTION=mysql#' .env &&
+            sed -i 's#DB_HOST=.*#DB_HOST=127.0.0.1#' .env &&
+            sed -i 's#DB_PORT=.*#DB_PORT=3306#' .env &&
+            sed -i 's#DB_DATABASE=.*#DB_DATABASE='$DB_DATABASE'#' .env &&
+            sed -i 's#DB_USERNAME=.*#DB_USERNAME='$DB_USERNAME'#' .env &&
+            sed -i 's#DB_PASSWORD=.*#DB_PASSWORD='$DB_PASSWORD'#' .env &&
+            cd '$DOMAIN_PATH/public_html' &&
+            cp .htaccess .htaccess.before-deploy &&
+            printf '<FilesMatch \"\\\\.(php4|php5|php3|php2|php|phtml)$\">\\n    SetHandler application/x-httpd-ea-php85___lsphp\\n</FilesMatch>\\n\\n' | cat - .htaccess.before-deploy > .htaccess &&
+            cd '$DOMAIN_PATH/app' &&
+            '$PHP_BIN' /usr/local/bin/composer install --no-dev --optimize-autoloader --no-interaction &&
+            '$PHP_BIN' artisan migrate --force &&
+            ('$PHP_BIN' artisan storage:link || true) &&
+            '$PHP_BIN' artisan optimize:clear &&
+            '$PHP_BIN' artisan optimize
+          "
