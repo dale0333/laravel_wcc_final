@@ -3,10 +3,10 @@
         <div class="max-w-7xl mx-auto sm:px-6 lg:px-8">
             <div class="mx-auto mb-8 max-w-2xl text-center">
                 <h1 class="text-2xl font-semibold text-gray-900">
-                    Employee updated
+                    Employee
                 </h1>
                 <p class="mt-2 text-sm text-gray-600">
-                    Create and manage employee records totoo
+                    Create and manage employee
                 </p>
             </div>
 
