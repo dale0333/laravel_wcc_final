@@ -89,31 +89,56 @@ jobs:
           DB_USERNAME: ${{ secrets.HOSTINGER_DB_USERNAME }}
           DB_PASSWORD: ${{ secrets.HOSTINGER_DB_PASSWORD }}
         run: |
-          sshpass -p "$SSH_PASSWORD" ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" "
-            cd '$DOMAIN_PATH/app' &&
-            if [ ! -f .env ]; then
-              cp .env.example .env
-              sed -i 's#APP_ENV=local#APP_ENV=production#' .env
-              sed -i 's#APP_DEBUG=true#APP_DEBUG=false#' .env
-              sed -i 's#APP_URL=.*#APP_URL=https://wheat-loris-872135.hostingersite.com#' .env
-              sed -i 's#DB_CONNECTION=.*#DB_CONNECTION=mysql#' .env
-              sed -i 's#DB_HOST=.*#DB_HOST=127.0.0.1#' .env
-              sed -i 's#DB_PORT=.*#DB_PORT=3306#' .env
-              '$PHP_BIN' artisan key:generate --force
-            fi &&
-            sed -i 's#DB_CONNECTION=.*#DB_CONNECTION=mysql#' .env &&
-            sed -i 's#DB_HOST=.*#DB_HOST=127.0.0.1#' .env &&
-            sed -i 's#DB_PORT=.*#DB_PORT=3306#' .env &&
-            sed -i 's#DB_DATABASE=.*#DB_DATABASE='$DB_DATABASE'#' .env &&
-            sed -i 's#DB_USERNAME=.*#DB_USERNAME='$DB_USERNAME'#' .env &&
-            sed -i 's#DB_PASSWORD=.*#DB_PASSWORD='$DB_PASSWORD'#' .env &&
-            cd '$DOMAIN_PATH/public_html' &&
-            cp .htaccess .htaccess.before-deploy &&
-            printf '<FilesMatch \"\\\\.(php4|php5|php3|php2|php|phtml)$\">\\n    SetHandler application/x-httpd-ea-php85___lsphp\\n</FilesMatch>\\n\\n' | cat - .htaccess.before-deploy > .htaccess &&
-            cd '$DOMAIN_PATH/app' &&
-            '$PHP_BIN' /usr/local/bin/composer install --no-dev --optimize-autoloader --no-interaction &&
-            '$PHP_BIN' artisan migrate --force &&
-            ('$PHP_BIN' artisan storage:link || true) &&
-            '$PHP_BIN' artisan optimize:clear &&
-            '$PHP_BIN' artisan optimize
-          "
+          db_database_b64=$(printf '%s' "$DB_DATABASE" | base64 -w 0)
+          db_username_b64=$(printf '%s' "$DB_USERNAME" | base64 -w 0)
+          db_password_b64=$(printf '%s' "$DB_PASSWORD" | base64 -w 0)
+
+          sshpass -p "$SSH_PASSWORD" ssh -p "$SSH_PORT" "$SSH_USER@$SSH_HOST" \
+            "DOMAIN_PATH='$DOMAIN_PATH' PHP_BIN='$PHP_BIN' DB_DATABASE_B64='$db_database_b64' DB_USERNAME_B64='$db_username_b64' DB_PASSWORD_B64='$db_password_b64' bash -s" <<'REMOTE'
+          set -e
+
+          decode_secret() {
+            printf '%s' "$1" | base64 -d
+          }
+
+          set_env() {
+            key="$1"
+            value="$2"
+
+            if grep -q "^${key}=" .env; then
+              escaped_value=$(printf '%s' "$value" | sed 's/[\/&]/\\&/g')
+              sed -i "s#^${key}=.*#${key}=${escaped_value}#" .env
+            else
+              printf '%s=%s\n' "$key" "$value" >> .env
+            fi
+          }
+
+          cd "$DOMAIN_PATH/app"
+
+          if [ ! -f .env ]; then
+            cp .env.example .env
+          fi
+
+          set_env APP_ENV production
+          set_env APP_DEBUG false
+          set_env APP_URL https://wheat-loris-872135.hostingersite.com
+          set_env DB_CONNECTION mysql
+          set_env DB_HOST 127.0.0.1
+          set_env DB_PORT 3306
+          set_env DB_DATABASE "$(decode_secret "$DB_DATABASE_B64")"
+          set_env DB_USERNAME "$(decode_secret "$DB_USERNAME_B64")"
+          set_env DB_PASSWORD "$(decode_secret "$DB_PASSWORD_B64")"
+
+          grep -q '^APP_KEY=base64:' .env || "$PHP_BIN" artisan key:generate --force
+
+          cd "$DOMAIN_PATH/public_html"
+          cp .htaccess .htaccess.before-deploy
+          printf '<FilesMatch "\\.(php4|php5|php3|php2|php|phtml)$">\n    SetHandler application/x-httpd-ea-php85___lsphp\n</FilesMatch>\n\n' | cat - .htaccess.before-deploy > .htaccess
+
+          cd "$DOMAIN_PATH/app"
+          "$PHP_BIN" /usr/local/bin/composer install --no-dev --optimize-autoloader --no-interaction
+          "$PHP_BIN" artisan migrate --force
+          "$PHP_BIN" artisan storage:link || true
+          "$PHP_BIN" artisan optimize:clear
+          "$PHP_BIN" artisan optimize
+          REMOTE
