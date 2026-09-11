@@ -6,7 +6,7 @@
                     Employee updated
                 </h1>
                 <p class="mt-2 text-sm text-gray-600">
-                    Create and manage employee records.
+                    Create and manage employee records totoo
                 </p>
             </div>
 
